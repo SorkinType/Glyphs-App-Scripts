@@ -1,4 +1,4 @@
-#MenuTitle: Transform Glyphs (Condense & Slant)
+#MenuTitle: Italicize Glyphs (Condense & Slant)
 # -*- coding: utf-8 -*-
 """
 Apply condensing and slanting transformations to selected glyphs.
@@ -108,55 +108,65 @@ class TransformDialog:
     def transform_layer(self, layer, condense_percent, slant_degrees, sidebearing_percent):
         """Apply transformation to a single layer."""
         
-        # Store original width and sidebearings
-        original_width = layer.width
-        original_lsb = layer.LSB
-        original_rsb = layer.RSB
-        
-        # Create transformation matrix
-        transform = NSAffineTransform.alloc().init()
-        
-        # Apply horizontal scaling (condensing)
-        scale_factor = condense_percent / 100.0
-        transform.scaleXBy_yBy_(scale_factor, 1.0)
-        
-        # Apply slanting (shearing)
-        if slant_degrees != 0:
-            # Convert degrees to radians and calculate skew
-            slant_radians = math.radians(slant_degrees)
-            skew = math.tan(slant_radians)
+        try:
+            # Store original width and sidebearings
+            original_lsb = layer.LSB
+            original_rsb = layer.RSB
             
-            # Create a new transform for skewing
-            skew_transform = NSAffineTransform.alloc().init()
+            # Create transformation matrix
+            transform = NSAffineTransform.alloc().init()
             
-            # Set up the transformation matrix for skewing
-            # Matrix: [1, 0, skew, 1, 0, 0]
-            matrix = skew_transform.transformStruct()
-            matrix.m11 = 1.0  # x scale
-            matrix.m12 = 0.0  # y shear
-            matrix.m21 = skew  # x shear (this creates the slant)
-            matrix.m22 = 1.0  # y scale
-            matrix.tX = 0.0
-            matrix.tY = 0.0
-            skew_transform.setTransformStruct_(matrix)
+            # Apply horizontal scaling (condensing)
+            scale_factor = condense_percent / 100.0
+            transform.scaleXBy_yBy_(scale_factor, 1.0)
             
-            # Combine transformations
-            transform.appendTransform_(skew_transform)
-        
-        # Apply transformation to all paths
-        for path in layer.paths:
-            path.applyTransform(transform.transformStruct())
-        
-        # Apply transformation to all components
-        for component in layer.components:
-            component.applyTransform(transform.transformStruct())
-        
-        # Adjust sidebearings based on sidebearing_percent
-        sidebearing_scale = sidebearing_percent / 100.0
-        layer.LSB = original_lsb * sidebearing_scale
-        layer.RSB = original_rsb * sidebearing_scale
-        
-        return True
+            # Apply slanting (shearing)
+            if slant_degrees != 0:
+                # Convert degrees to radians and calculate skew
+                slant_radians = math.radians(slant_degrees)
+                skew = math.tan(slant_radians)
+                
+                # Create a new transform for skewing
+                skew_transform = NSAffineTransform.alloc().init()
+                
+                # Set up the transformation matrix for skewing
+                matrix = skew_transform.transformStruct()
+                matrix.m11 = 1.0  # x scale
+                matrix.m12 = 0.0  # y shear
+                matrix.m21 = skew  # x shear (this creates the slant)
+                matrix.m22 = 1.0  # y scale
+                matrix.tX = 0.0
+                matrix.tY = 0.0
+                skew_transform.setTransformStruct_(matrix)
+                
+                # Combine transformations
+                transform.appendTransform_(skew_transform)
+            
+            # Get the transform structure once
+            transform_struct = transform.transformStruct()
+            
+            # Apply transformation to all paths
+            for path in layer.paths:
+                # FIXED: Use the correct method signature
+                path.applyTransform(transform_struct)
+            
+            # Apply transformation to all components
+            for component in layer.components:
+                # FIXED: Use the correct method signature
+                component.applyTransform(transform_struct)
+            
+            # Adjust sidebearings based on sidebearing_percent
+            sidebearing_scale = sidebearing_percent / 100.0
+            layer.LSB = original_lsb * sidebearing_scale
+            layer.RSB = original_rsb * sidebearing_scale
+            
+            return True
+            
+        except Exception as e:
+            print(f"    ERROR transforming layer: {e}")
+            import traceback
+            traceback.print_exc()
+            return False
     
     def transform(self, sender):
         print("\n" + "="*60)
@@ -198,6 +208,7 @@ class TransformDialog:
         
         # Process glyphs
         total_layers = 0
+        errors = 0
         
         for glyph in self.selected_glyphs:
             print(f"\n{glyph.name}:")
@@ -207,24 +218,36 @@ class TransformDialog:
                 for master in self.font.masters:
                     layer = glyph.layers[master.id]
                     if layer:
-                        self.transform_layer(layer, condense_percent, slant_degrees, sidebearing_percent)
-                        total_layers += 1
-                        print(f"  ✓ Transformed in {master.name}")
+                        success = self.transform_layer(layer, condense_percent, slant_degrees, sidebearing_percent)
+                        if success:
+                            total_layers += 1
+                            print(f"  ✓ Transformed in {master.name}")
+                        else:
+                            errors += 1
+                            print(f"  ✗ Failed in {master.name}")
             else:
                 # Apply only to current master
                 layer = glyph.layers[self.current_master.id]
                 if layer:
-                    self.transform_layer(layer, condense_percent, slant_degrees, sidebearing_percent)
-                    total_layers += 1
-                    print(f"  ✓ Transformed in {self.current_master.name}")
+                    success = self.transform_layer(layer, condense_percent, slant_degrees, sidebearing_percent)
+                    if success:
+                        total_layers += 1
+                        print(f"  ✓ Transformed in {self.current_master.name}")
+                    else:
+                        errors += 1
+                        print(f"  ✗ Failed in {self.current_master.name}")
         
         # Show results
         print(f"\n{'='*60}")
         print(f"Total layers transformed: {total_layers}")
+        if errors > 0:
+            print(f"Errors encountered: {errors}")
         print(f"{'='*60}")
         
         if total_layers > 0:
             msg = f"✓ Transformed {total_layers} layers in {len(self.selected_glyphs)} glyphs"
+            if errors > 0:
+                msg += f"\n({errors} errors encountered)"
             Message("Success", msg)
             print(f"\n✓ SUCCESS: {msg}")
             self.w.close()

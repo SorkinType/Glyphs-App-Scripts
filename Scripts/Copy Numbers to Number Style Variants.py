@@ -1,4 +1,4 @@
-# MenuTitle: Copy Numbers to Number Style Variants
+# MenuTitle: Create Number Variants
 # -*- coding: utf-8 -*-
 __doc__ = """
 Creates component copies of default numbers (0-9) with various suffixes.
@@ -26,7 +26,11 @@ class NumberVariantGenerator:
         y += 40
         
         # Checkboxes for standard variants
-        self.w.liningCheck = vanilla.CheckBox((10, y, -10, 20), 
+        self.w.lfCheck = vanilla.CheckBox((10, y, -10, 20), 
+            "Lining Figures (.lf)", value=False)
+        y += 25
+        
+        self.w.tfCheck = vanilla.CheckBox((10, y, -10, 20), 
             "Tabular Figures (.tf)", value=False)
         y += 25
         
@@ -90,7 +94,9 @@ class NumberVariantGenerator:
         # Collect selected variants
         variants = []
         
-        if self.w.liningCheck.get():
+        if self.w.lfCheck.get():
+            variants.append("lf")
+        if self.w.tfCheck.get():
             variants.append("tf")
         if self.w.osfCheck.get():
             variants.append("osf")
